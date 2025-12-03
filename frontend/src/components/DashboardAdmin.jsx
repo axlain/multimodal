@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE, fetchWithToken } from '../services/api.js';
-import { iniciarTramite, buscarInstanciasPorMaestro } from '../services/instancias';
+import { iniciarTramite, buscarInstanciasPorMaestro } from '../services/instancias.js';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -301,7 +301,7 @@ export default function Dashboard() {
                             onClick={async () => {
                               if (!confirm(`¿Eliminar el trámite "${t.nombre}"?`)) return;
                               try {
-                                const { eliminarTramite } = await import('../services/tramite');
+                                const { eliminarTramite } = await import('../services/tramite.js');
                                 await eliminarTramite(t.id);
                                 await loadTramitesForArea(selectedAreaId);
                               } catch (e) {

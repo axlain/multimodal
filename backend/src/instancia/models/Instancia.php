@@ -1,7 +1,7 @@
 <?php
 namespace App\Instancia\Models;
 require_once __DIR__ . '/../../config/database.php';
-
+use App\Archivo\Models\Archivo;
 class Instancia
 {
     /** Crear una instancia (iniciar trámite) */
@@ -106,5 +106,17 @@ class Instancia
         $data = $res->fetch_all(MYSQLI_ASSOC) ?: [];
         $stmt->close();
         return $data;
+    }
+
+    // 🔹 NUEVO MÉTODO: Finalizar instancia
+     public static function finalizar(int $id_instancia): bool
+    {
+        if ($id_instancia <= 0) {
+            throw new \RuntimeException('ID inválido', 400);
+        }
+
+        // 👇 delega toda la validación y actualización a Archivo::verificarYCompletarInstancia
+        Archivo::verificarYCompletarInstancia($id_instancia);
+        return true;
     }
 }

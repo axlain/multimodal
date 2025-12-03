@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { editarTramite, tramitesPorArea } from '../services/tramite';
+import { editarTramite } from '../services/tramite';
 
 export default function TramiteEditar() {
   const navigate = useNavigate();

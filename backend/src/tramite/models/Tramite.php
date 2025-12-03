@@ -20,6 +20,7 @@ class Tramite
         $stmt->close();
         return $id;
     }
+
     /** EDITAR (parcial) */
     public static function editarTramite(int $id, array $data): bool
     {
@@ -99,8 +100,8 @@ class Tramite
         $stmt->close();
         return $data;
     }
-    
-    /** OBTENER TODOS los tramites */
+
+    /** OBTENER TODOS los trámites */
     public static function obtenerTodosTramites(): array
     {
         $mysqli = db();
@@ -113,7 +114,7 @@ class Tramite
         $res->close();
         return $data ?: [];
     }
-    
+
     /** OBTENER TRÁMITES por Área */
     public static function obtenerTramitesPorArea(int $id_area): array
     {
@@ -135,6 +136,92 @@ class Tramite
         return $data;
     }
 
+    /** OBTENER DETALLE por ID */
+    public static function obtenerPorId(int $id_tramite): ?array
+    {
+        $mysqli = db();
 
+        $sql = "SELECT t.id_tramite, t.nombre AS nombre_tramite, t.descripcion, 
+                       t.id_area, t.estado, a.nombre AS area_nombre
+                FROM tramites t
+                JOIN areas a ON a.id_area = t.id_area
+                WHERE t.id_tramite = ?";
+        $stmt = $mysqli->prepare($sql);
+        $stmt->bind_param("i", $id_tramite);
+        $stmt->execute();
+        $tramite = $stmt->get_result()->fetch_assoc();
 
+        if (!$tramite) return null;
+
+        // Último maestro asociado
+        $stmt2 = $mysqli->prepare("
+            SELECT mi.maestro_nombre, m.rfc, m.numero_de_personal
+            FROM tramites_instancias mi
+            LEFT JOIN maestros m ON m.nombre = mi.maestro_nombre
+            WHERE mi.id_tramite = ?
+            ORDER BY mi.created_at DESC
+            LIMIT 1
+        ");
+        $stmt2->bind_param("i", $id_tramite);
+        $stmt2->execute();
+        $maestro = $stmt2->get_result()->fetch_assoc();
+
+        return array_merge($tramite, [
+            'nombre_personal' => $maestro['maestro_nombre'] ?? '',
+            'rfc' => $maestro['rfc'] ?? '',
+            'numero_personal' => $maestro['numero_de_personal'] ?? ''
+        ]);
+    }
+
+    /** VERIFICAR si tiene archivos completos */
+    public static function tieneArchivosCompletos(int $id_tramite): bool
+    {
+        $mysqli = db();
+        $sql = "SELECT COUNT(*) AS subidos, 
+                       (SELECT COUNT(*) FROM requisitos WHERE id_tramite = ?) AS totales
+                FROM archivos WHERE id_tramite = ?";
+        $stmt = $mysqli->prepare($sql);
+        $stmt->bind_param("ii", $id_tramite, $id_tramite);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        return $row && (int)$row['subidos'] >= (int)$row['totales'];
+    }
+
+    /** 🔹 OBTENER DATOS COMPLETOS PARA CONSTANCIA */
+    public static function obtenerDatosParaConstancia(int $id_instancia): ?array
+    {
+        $mysqli = db();
+
+        $sql = "
+            SELECT 
+                ti.id_instancia,
+                ti.id_tramite,
+                ti.maestro_nombre AS nombre_personal,
+                ti.estado,
+                ti.created_at,
+                t.nombre AS nombre_tramite,
+                a.nombre AS area_nombre,
+                u.nombre AS nombre_solicitante,
+                u.email AS correo_solicitante,
+                m.rfc,
+                m.numero_de_personal
+            FROM tramites_instancias ti
+            JOIN tramites t ON t.id_tramite = ti.id_tramite
+            LEFT JOIN areas a ON a.id_area = t.id_area
+            LEFT JOIN usuarios u ON u.id_usuario = ti.solicitante_id
+            LEFT JOIN maestros m ON m.nombre = ti.maestro_nombre
+            WHERE ti.id_instancia = ?
+            LIMIT 1
+        ";
+
+        $stmt = $mysqli->prepare($sql);
+        if (!$stmt) throw new \RuntimeException("Prepare failed: " . $mysqli->error);
+        $stmt->bind_param('i', $id_instancia);
+        $stmt->execute();
+
+        $res = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return $res ?: null;
+    }
 }

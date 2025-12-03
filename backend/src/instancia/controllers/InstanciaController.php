@@ -134,4 +134,56 @@ class InstanciaController
             echo json_encode(['ok'=>false,'error'=>'Error interno']);
         }
     }
+
+    public static function finalizar()
+    {
+        header('Content-Type: application/json; charset=utf-8');
+        try {
+            AuthMiddleware::verificarToken();
+
+            $input = json_decode(file_get_contents('php://input'), true) ?? [];
+            $id_instancia = (int)($input['id_instancia'] ?? 0);
+            if ($id_instancia <= 0) {
+                throw new \RuntimeException('ID de instancia inválido', 400);
+            }
+
+            $ok = InstanciaService::finalizar($id_instancia);
+
+            echo json_encode([
+                'ok' => $ok,
+                'estado' => 'finalizado',
+                'msg' => 'Instancia finalizada correctamente'
+            ], JSON_UNESCAPED_UNICODE);
+
+        } catch (\RuntimeException $e) {
+            http_response_code($e->getCode() ?: 400);
+            echo json_encode(['ok' => false, 'error' => $e->getMessage()]);
+        } catch (\Throwable $e) {
+            http_response_code(500);
+            echo json_encode(['ok' => false, 'error' => 'Error interno']);
+        }
+    }
+
+    public static function porUsuario()
+    {
+        header('Content-Type: application/json; charset=utf-8');
+
+        try {
+            $payload = \App\Middleware\AuthMiddleware::verificarToken();
+            $usr = $payload['usr'] ?? null;
+            if (!$usr || empty($usr['id_usuario'])) {
+                http_response_code(401);
+                echo json_encode(['ok' => false, 'error' => 'Usuario no autenticado']);
+                return;
+            }
+
+            $data = \App\Instancia\Services\InstanciaService::listarInstanciasUsuario((int)$usr['id_usuario']);
+            echo json_encode(['ok' => true, 'data' => $data], JSON_UNESCAPED_UNICODE);
+
+        } catch (\Throwable $e) {
+            http_response_code(500);
+            echo json_encode(['ok' => false, 'error' => $e->getMessage()]);
+        }
+    }
+
 }

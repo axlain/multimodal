@@ -49,4 +49,46 @@ class InstanciaService
         if ($id_tramite <= 0) throw new \RuntimeException('Trámite inválido', 400);
             return Instancia::listarPorTramite($id_tramite);
     }
+    public static function finalizar(int $id_instancia): bool
+    {
+        if ($id_instancia <= 0) {
+            throw new \RuntimeException('ID inválido', 400);
+        }
+
+        return Instancia::finalizar($id_instancia);
+    }
+
+    // Ejemplo: src/instancia/services/InstanciaService.php
+    public static function listarInstanciasUsuario(int $idUsuario): array
+    {
+        $db = db();
+        $sql = "
+            SELECT 
+                i.id_instancia,
+                i.id_tramite,
+                i.maestro_nombre,
+                i.estado,
+                i.constancia_path,
+                i.created_at,
+                t.nombre AS nombre_tramite,
+                a.nombre AS area_nombre,
+                c.id AS id_constancia,
+                c.nombre_archivo AS constancia_nombre
+            FROM tramites_instancias i
+            INNER JOIN tramites t ON i.id_tramite = t.id_tramite
+            LEFT JOIN areas a ON t.id_area = a.id_area
+            LEFT JOIN constancias c ON c.id_tramite = i.id_tramite
+            WHERE i.solicitante_id = ?
+            ORDER BY i.created_at DESC
+        ";
+
+        $stmt = $db->prepare($sql);
+        $stmt->bind_param("i", $idUsuario);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        return $result->fetch_all(MYSQLI_ASSOC);
+    }
+
+
+
 }

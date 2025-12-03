@@ -1,18 +1,38 @@
 <?php
+use App\Middleware\AuthMiddleware;
 use App\Area\Controllers\AreaController;
 
-$request_uri    = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-$request_method = $_SERVER['REQUEST_METHOD'];
-// ...
-if ($request_method === "GET"  && $request_uri === '/api/sitev/area/obtenerTodas') { AreaController::index();
-} elseif ($request_method === 'POST' && $request_uri === '/api/sitev/area/crear') { AreaController::crear();
-} elseif ($request_method === 'GET'  && $request_uri === '/api/sitev/area/buscar') { AreaController::buscar();
-} elseif ($request_method === 'PUT'  && $request_uri === '/api/sitev/area/editar') { AreaController::editar();
-} elseif ($request_method === 'DELETE'&& $request_uri === '/api/sitev/area/eliminar') { AreaController::eliminar();
-} elseif ($request_method === 'GET'  && $request_uri === '/api/sitev/area/mostrarNombre') { AreaController::mostrarNombre();
-} elseif ($request_method === 'GET'  && $request_uri === '/api/sitev/area/usuarios') { AreaController::usuarios();
-} elseif ($request_method === 'GET'  && $request_uri === '/api/sitev/area/tramites') { AreaController::tramites();
-} elseif ($request_method === 'GET' && $request_uri === '/api/sitev/area/obtenerAreaPorUsuario') { 
-    AreaController::obtenerAreaPorUsuario(); 
-}
+$path   = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) ?? '/';
+$method = $_SERVER['REQUEST_METHOD'];
 
+try {
+    // 🔒 Todas estas rutas requieren token. Si alguna debe ser pública, muévela ANTES de este try/catch.
+    $payload = AuthMiddleware::verificarToken();
+    $usr = $payload['usr'] ?? null;
+
+    if ($method === 'GET' && $path === '/api/sitev/area/obtenerTodas') {
+        AreaController::index($usr); // listar todas
+    } elseif ($method === 'POST' && $path === '/api/sitev/area/crear') {
+        AreaController::crear($usr);
+    } elseif ($method === 'GET' && $path === '/api/sitev/area/buscar') {
+        AreaController::buscar($usr); // ?q=
+    } elseif ($method === 'PUT' && $path === '/api/sitev/area/editar') {
+        AreaController::editar($usr);
+    } elseif ($method === 'DELETE' && $path === '/api/sitev/area/eliminar') {
+        AreaController::eliminar($usr);
+    } elseif ($method === 'GET' && $path === '/api/sitev/area/mostrarNombre') {
+        AreaController::mostrarNombre($usr); // ?id_area=
+    } elseif ($method === 'GET' && $path === '/api/sitev/area/usuarios') {
+        AreaController::usuarios($usr); // usuarios por área
+    } elseif ($method === 'GET' && $path === '/api/sitev/area/tramites') {
+        AreaController::tramites($usr); // trámites por área
+    } elseif ($method === 'GET' && $path === '/api/sitev/area/obtenerAreaPorUsuario') {
+        AreaController::obtenerAreaPorUsuario($usr); // usa $usr del token
+    } else {
+        http_response_code(404);
+        echo json_encode(['ok' => false, 'error' => 'Ruta no encontrada']);
+    }
+} catch (\RuntimeException $ex) {
+    http_response_code($ex->getCode() ?: 401);
+    echo json_encode(['ok' => false, 'error' => $ex->getMessage()]);
+}
