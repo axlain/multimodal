@@ -67,7 +67,7 @@ export default function HeaderUsuario({ areaId, userName, onLogout, onOpenHistor
             cursor: 'pointer'
           }}
         >
-          👤 {userName} — Cerrar sesión
+            {userName} — Cerrar sesión
         </button>
       </div>
     </header>

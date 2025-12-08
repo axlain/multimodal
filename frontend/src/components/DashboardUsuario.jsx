@@ -29,6 +29,8 @@ export default function DashboardUsuario() {
   const { areaId, name } = useAuthUser();
 
   const [fecha, setFecha] = useState(todayStr());
+
+  // Maestro
   const [maestroForm, setMaestroForm] = useState({
     nombre: "",
     ap_paterno: "",
@@ -36,15 +38,17 @@ export default function DashboardUsuario() {
     rfc: "",
     numero_de_personal: "",
   });
-
   const [maestroSel, setMaestroSel] = useState(null);
 
+  // Escuela
   const [escuelaForm, setEscuelaForm] = useState({ nombre: "", clave: "" });
   const [escuelaSel, setEscuelaSel] = useState(null);
 
+  // Trámite
   const [tramiteSel, setTramiteSel] = useState(null);
   const [listaTramites, setListaTramites] = useState([]);
 
+  // Instancia
   const [instancia, setInstancia] = useState(null);
   const [reqValues, setReqValues] = useState({});
   const [requisitos, setRequisitos] = useState([]);
@@ -62,8 +66,9 @@ export default function DashboardUsuario() {
 
   const [pendingSearch, setPendingSearch] = useState(null);
 
-  // 🔥 ASISTENTE DE VOZ
+  /* ---------------------- 🔥 ASISTENTE DE VOZ ---------------------- */
   const voice = useVoiceController({
+    /* BÚSQUEDAS */
     onBuscarMaestroPorNombre: (nombre) =>
       maestroRef.current?.setSearch(nombre),
 
@@ -80,23 +85,27 @@ export default function DashboardUsuario() {
       setOpenHistorial(true);
     },
 
-    onSetMaestroField: (campo, valor) => {
-      setMaestroForm((prev) => ({ ...prev, [campo]: valor }));
-    },
+    /* REGISTRO GUIADO */
+    onSetMaestroField: (campo, valor) =>
+      setMaestroForm((prev) => ({ ...prev, [campo]: valor })),
 
-    onGuardarMaestro: () => {
-      document.querySelector("#btn-guardar-maestro")?.click();
-    },
+    onGuardarMaestro: () => maestroRef.current?.guardar(),
 
-    onSetEscuelaField: (campo, valor) => {
-      setEscuelaForm((prev) => ({ ...prev, [campo]: valor }));
-    },
+    onSetEscuelaField: (campo, valor) =>
+      setEscuelaForm((prev) => ({ ...prev, [campo]: valor })),
 
-    onGuardarEscuela: () => {
-      document.querySelector("#btn-guardar-escuela")?.click();
+    onGuardarEscuela: () => escuelaRef.current?.guardar(),
+
+    /* ❗ CANCELAR TRÁMITE (NOMBRE CORRECTO) */
+    onCancelarTramite: () => {
+      maestroRef.current?.limpiar();
+      escuelaRef.current?.limpiar();
+      resetAllForms();
+      window.scrollTo({ top: 0, behavior: "smooth" });
     },
   });
 
+  /* ---------------------- HISTORIAL ---------------------- */
   useEffect(() => {
     if (openHistorial && pendingSearch && historialRef.current) {
       historialRef.current.setSearch(pendingSearch.value);
@@ -104,6 +113,7 @@ export default function DashboardUsuario() {
     }
   }, [openHistorial, pendingSearch]);
 
+  /* ----------------- CARGAR REQUISITOS ----------------- */
   async function cargarRequisitos(id_tramite) {
     try {
       const list = await obtenerRequisitosPorTramite(id_tramite);
@@ -123,6 +133,7 @@ export default function DashboardUsuario() {
     }
   }, [tramiteSel]);
 
+  /* ---------------- GUARDAR INSTANCIA ---------------- */
   async function handleGuardarInstancia() {
     setOkMsg(null);
     setErrMsg(null);
@@ -147,6 +158,7 @@ export default function DashboardUsuario() {
     try {
       setSaving(true);
       const res = await crearInstancia(payload);
+
       if (res?.id_instancia) {
         setInstancia(res);
         setOkMsg("Trámite guardado correctamente.");
@@ -160,6 +172,7 @@ export default function DashboardUsuario() {
     }
   }
 
+  /* ---------------- RESET GENERAL ---------------- */
   function resetAllForms() {
     setTramiteSel(null);
     setMaestroForm({
@@ -170,8 +183,10 @@ export default function DashboardUsuario() {
       numero_de_personal: "",
     });
     setMaestroSel(null);
+
     setEscuelaForm({ nombre: "", clave: "" });
     setEscuelaSel(null);
+
     setFecha(todayStr());
     setReqValues({});
     setInstancia(null);
@@ -179,6 +194,7 @@ export default function DashboardUsuario() {
     setErrMsg(null);
   }
 
+  /* ---------------- LOGOUT ---------------- */
   function logout() {
     localStorage.clear();
     window.location.assign("/login");
@@ -233,7 +249,13 @@ export default function DashboardUsuario() {
         </div>
 
         {/* Trámite */}
-        <div style={{ marginTop: 30, display: "flex", justifyContent: "center" }}>
+        <div
+          style={{
+            marginTop: 30,
+            display: "flex",
+            justifyContent: "center",
+          }}
+        >
           <section
             style={{
               background: "#fff",
@@ -329,11 +351,10 @@ export default function DashboardUsuario() {
           <HistorialCards ref={historialRef} theme={T} />
         </HistorialModal>
 
-        {/* Guía de comandos */}
         <VoiceHelpModal open={openHelp} onClose={() => setOpenHelp(false)} />
       </div>
 
-      {/* ======================= MIC + COMANDOS ======================= */}
+      {/* MIC + COMANDOS */}
       <div
         style={{
           position: "fixed",
@@ -345,7 +366,6 @@ export default function DashboardUsuario() {
           zIndex: 5000,
         }}
       >
-        {/* Botón comandos de voz */}
         <button
           onClick={() => setOpenHelp(true)}
           style={{
@@ -363,7 +383,6 @@ export default function DashboardUsuario() {
           Comandos de voz
         </button>
 
-        {/* Micrófono */}
         <div
           onClick={() =>
             voice.listening ? voice.stopListening() : voice.startListening()
@@ -387,7 +406,7 @@ export default function DashboardUsuario() {
         </div>
       </div>
 
-      {/* Texto debajo del micrófono */}
+      {/* TEXTO MIC */}
       <div
         style={{
           position: "fixed",

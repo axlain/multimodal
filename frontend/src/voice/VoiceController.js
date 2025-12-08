@@ -2,8 +2,7 @@ import { useEffect, useState } from "react";
 import useSpeechRecognition from "../Hooks/useSpeechRecognition";
 import useSpeechSynthesis from "../Hooks/useSpeechSynthesis";
 
-/* ------------------------- UTILIDAD DE CAPITALIZAR ------------------------- */
-/* Convierte "carlos raúl" → "Carlos Raúl" */
+/* ----------------------- UTILIDAD CAPITALIZAR ----------------------- */
 function capitalizar(texto) {
   return texto
     .split(" ")
@@ -12,19 +11,27 @@ function capitalizar(texto) {
     .join(" ");
 }
 
+/* -------------------------- SONIDO BEEP ----------------------------- */
+function beep() {
+  const audio = new Audio(
+    "data:audio/wav;base64,UklGRlYAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA="
+  );
+  audio.play();
+}
+
 export default function useVoiceController({
   onBuscarMaestroPorNombre,
   onBuscarEscuelaPorNombre,
   onBuscarTramitePorTexto,
   onBuscarTramitePorMaestro,
 
-  /* Registro guiado de maestro */
   onSetMaestroField,
   onGuardarMaestro,
 
-  /* Registro guiado de escuela */
   onSetEscuelaField,
   onGuardarEscuela,
+
+  onCancelarTramite, // 🔥 callback real del Dashboard
 }) {
   const {
     supported,
@@ -39,27 +46,89 @@ export default function useVoiceController({
   const { speak } = useSpeechSynthesis({ lang: "es-MX" });
 
   const [transcripcion, setTranscripcion] = useState("");
-
-  /* PASO ACTUAL DEL MODO REGISTRO */
   const [modo, setModo] = useState(null); // "maestro" | "escuela"
   const [paso, setPaso] = useState(null);
 
-  /* ------------------------------ PROCESADOR ------------------------------ */
+  /* Estado interno de confirmación */
+  const confirmState = {
+    esperando: false,
+  };
+
+  const solicitarConfirmacion = (msg, callback) => {
+    speak(msg);
+    confirmState.esperando = callback;
+  };
+
+  const procesarConfirmacion = (comando) => {
+    const si = comando.includes("sí") || comando.includes("si") || comando.includes("confirmo");
+    const no = comando.includes("no");
+
+    if (si) {
+      confirmState.esperando(true);
+    } else {
+      confirmState.esperando(false);
+    }
+
+    confirmState.esperando = false;
+  };
+
+  /* ======================================================================
+     ============================ PROCESADOR ===============================
+     ====================================================================== */
   useEffect(() => {
     if (!result) return;
 
     const comando = result.toLowerCase().trim();
     setTranscripcion(comando);
 
-    /* ============================================================
-       =============== REGISTRO GUIADO DE MAESTRO ==================
-       ============================================================ */
+    /* --- Si está esperando confirmación --- */
+    if (confirmState.esperando) {
+      procesarConfirmacion(comando);
+      resetResult();
+      return;
+    }
+
+    /* =====================================================================
+       ========================== CANCELAR TRÁMITE ==========================
+       ===================================================================== */
+
+    if (
+      comando.includes("cancelar trámite") ||
+      comando.includes("cancelar registro") ||
+      comando.includes("cancelar todo")
+    ) {
+      solicitarConfirmacion("¿Seguro que deseas cancelar el trámite?", (ok) => {
+        if (ok) {
+          speak("Cancelando, limpiando el formulario.");
+          onCancelarTramite?.();
+          beep();
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        } else {
+          speak("De acuerdo, continuamos.");
+        }
+      });
+
+      resetResult();
+      return;
+    }
+
+    /* =====================================================================
+       ====================== REGISTRO GUIADO: MAESTRO ======================
+       ===================================================================== */
+
     if (modo === "maestro") {
-      // cancelar registro
       if (comando.includes("cancelar")) {
-        speak("Registro cancelado");
-        setModo(null);
-        setPaso(null);
+        solicitarConfirmacion("¿Deseas cancelar el registro del maestro?", (ok) => {
+          if (ok) {
+            speak("Registro cancelado.");
+            onCancelarTramite?.();
+            beep();
+            setModo(null);
+            setPaso(null);
+          } else {
+            speak("Continuemos entonces.");
+          }
+        });
         resetResult();
         return;
       }
@@ -89,7 +158,12 @@ export default function useVoiceController({
       }
 
       if (paso === "rfc") {
-        onSetMaestroField("rfc", comando.toUpperCase());
+        const limpio = comando
+          .replace(/\s+/g, "")
+          .replace(/[^a-z0-9]/gi, "")
+          .toUpperCase();
+
+        onSetMaestroField("rfc", limpio);
         speak("Indique número de personal");
         setPaso("numero");
         resetResult();
@@ -97,7 +171,8 @@ export default function useVoiceController({
       }
 
       if (paso === "numero") {
-        onSetMaestroField("numero_de_personal", capitalizar(comando));
+        const limpio = comando.replace(/\s+/g, "");
+        onSetMaestroField("numero_de_personal", limpio);
         speak("Revise los datos. ¿Desea guardarlos?");
         setPaso("confirmar");
         resetResult();
@@ -108,9 +183,8 @@ export default function useVoiceController({
         if (comando.includes("sí") || comando.includes("guardar")) {
           speak("Guardando maestro");
           onGuardarMaestro();
-        } else {
-          speak("De acuerdo, puede corregir los datos manualmente.");
-        }
+        } else speak("De acuerdo, puede corregir los datos manualmente.");
+
         setModo(null);
         setPaso(null);
         resetResult();
@@ -118,14 +192,23 @@ export default function useVoiceController({
       }
     }
 
-    /* ============================================================
-       ================= REGISTRO GUIADO DE ESCUELA ================
-       ============================================================ */
+    /* =====================================================================
+       ====================== REGISTRO GUIADO: ESCUELA ======================
+       ===================================================================== */
+
     if (modo === "escuela") {
       if (comando.includes("cancelar")) {
-        speak("Registro cancelado");
-        setModo(null);
-        setPaso(null);
+        solicitarConfirmacion("¿Deseas cancelar el registro de la escuela?", (ok) => {
+          if (ok) {
+            speak("Registro cancelado.");
+            onCancelarTramite?.();
+            beep();
+            setModo(null);
+            setPaso(null);
+          } else {
+            speak("Continuemos entonces.");
+          }
+        });
         resetResult();
         return;
       }
@@ -139,7 +222,12 @@ export default function useVoiceController({
       }
 
       if (paso === "clave") {
-        onSetEscuelaField("clave", comando.toUpperCase());
+        const limpio = comando
+          .replace(/\s+/g, "")
+          .replace(/[^a-z0-9]/gi, "")
+          .toUpperCase();
+
+        onSetEscuelaField("clave", limpio);
         speak("Revise los datos. ¿Desea guardarlos?");
         setPaso("confirmar");
         resetResult();
@@ -150,9 +238,7 @@ export default function useVoiceController({
         if (comando.includes("sí") || comando.includes("guardar")) {
           speak("Guardando escuela");
           onGuardarEscuela();
-        } else {
-          speak("De acuerdo, puede corregir los datos manualmente.");
-        }
+        } else speak("De acuerdo, puede corregir los datos manualmente.");
 
         setModo(null);
         setPaso(null);
@@ -161,20 +247,12 @@ export default function useVoiceController({
       }
     }
 
-    /* ============================================================
-       ================= BUSQUEDAS RÁPIDAS ========================
-       ============================================================ */
+    /* =====================================================================
+       =========================== BÚSQUEDAS ===============================
+       ===================================================================== */
 
     if (comando.startsWith("buscar maestro ")) {
       const nombre = capitalizar(comando.replace("buscar maestro", "").trim());
-      speak(`Buscando maestro ${nombre}`);
-      onBuscarMaestroPorNombre?.(nombre);
-      resetResult();
-      return;
-    }
-
-    if (comando.startsWith("maestro ")) {
-      const nombre = capitalizar(comando.replace("maestro", "").trim());
       speak(`Buscando maestro ${nombre}`);
       onBuscarMaestroPorNombre?.(nombre);
       resetResult();
@@ -189,15 +267,10 @@ export default function useVoiceController({
       return;
     }
 
-    if (comando.startsWith("escuela ")) {
-      const nombre = capitalizar(comando.replace("escuela", "").trim());
-      speak(`Buscando escuela ${nombre}`);
-      onBuscarEscuelaPorNombre?.(nombre);
-      resetResult();
-      return;
-    }
-
-    if (comando.startsWith("buscar trámite ") || comando.startsWith("buscar tramite ")) {
+    if (
+      comando.startsWith("buscar trámite ") ||
+      comando.startsWith("buscar tramite ")
+    ) {
       const texto = comando
         .replace("buscar trámite", "")
         .replace("buscar tramite", "")
@@ -216,10 +289,7 @@ export default function useVoiceController({
       return;
     }
 
-    /* ============================================================
-       =================== ACTIVAR MODO REGISTRO ===================
-       ============================================================ */
-
+    /* ACTIVAR REGISTRO */
     if (comando === "registrar maestro") {
       speak("Diga el nombre del maestro");
       setModo("maestro");
@@ -236,24 +306,9 @@ export default function useVoiceController({
       return;
     }
 
-    // No entendió el comando
-    speak("No entendí el comando de voz.");
+    speak("No entendí el comando.");
     resetResult();
-  }, [
-    result,
-    modo,
-    paso,
-    onBuscarMaestroPorNombre,
-    onBuscarEscuelaPorNombre,
-    onBuscarTramitePorTexto,
-    onBuscarTramitePorMaestro,
-    onSetMaestroField,
-    onGuardarMaestro,
-    onSetEscuelaField,
-    onGuardarEscuela,
-    speak,
-    resetResult,
-  ]);
+  }, [result]);
 
   return {
     supported,

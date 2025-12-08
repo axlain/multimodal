@@ -31,14 +31,29 @@ function MaestroCard(
   const [msg, setMsg] = useState(null);
   const boxRef = useRef(null);
 
-  // 👇 Exponer métodos para control por voz
+  /* ---------------- MÉTODOS EXTERNOS ---------------- */
   useImperativeHandle(ref, () => ({
     setSearch: (texto) => {
       setQ(texto);
       setOpen(true);
     },
+    guardar,
+    limpiar,
   }));
 
+  function limpiar() {
+    onSelect(null);
+    onFormChange({
+      nombre: "",
+      ap_paterno: "",
+      ap_materno: "",
+      rfc: "",
+      numero_de_personal: "",
+    });
+    setMsg(null);
+  }
+
+  /* ---------------- BÚSQUEDA ---------------- */
   useEffect(() => {
     const h = (e) => {
       if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false);
@@ -51,32 +66,38 @@ function MaestroCard(
     if (!open) return;
     const t = setTimeout(async () => {
       const s = q.trim();
-      if (s.length < 2) {
-        setResults([]);
-        return;
-      }
+      if (s.length < 2) return setResults([]);
+
       try {
-        setResults(await buscarMaestros(s));
+        const r = await buscarMaestros(s);
+        setResults(r);
       } catch {
         setResults([]);
       }
     }, 300);
+
     return () => clearTimeout(t);
   }, [q, open]);
 
+  /* ---------------- GUARDAR ---------------- */
   async function guardar() {
     setMsg(null);
+
     if (!form.nombre?.trim() || !form.ap_paterno?.trim()) {
-      setMsg("Nombre y apellido paterno son requeridos");
-      return;
+      return setMsg("Nombre y apellido paterno son requeridos");
     }
+
     try {
       setSaving(true);
-      const data = await crearMaestro({
+
+      const payload = {
         ...form,
-        rfc: form.rfc?.toUpperCase() || null,
-      });
+        rfc: form.rfc?.replace(/\s+/g, "").toUpperCase() || null,
+      };
+
+      const data = await crearMaestro(payload);
       onSelect({ id_maestro: data?.id_maestro, ...form });
+
       setMsg("Maestro guardado ✓");
     } catch (e) {
       setMsg(e instanceof Error ? e.message : String(e));
@@ -85,6 +106,7 @@ function MaestroCard(
     }
   }
 
+  /* ---------------- UI ---------------- */
   return (
     <section style={card(theme)}>
       <header style={cardHead}>
@@ -92,9 +114,10 @@ function MaestroCard(
           <span style={pill(theme)}>Maestro</span>
           <h2 style={title}>Datos del maestro</h2>
         </div>
+
         <div ref={boxRef} style={{ position: "relative", minWidth: 320 }}>
           <input
-            placeholder="Buscar maestro (mín. 2 letras)"
+            placeholder="Buscar maestro"
             value={q}
             onFocus={() => setOpen(true)}
             onChange={(e) => {
@@ -103,11 +126,13 @@ function MaestroCard(
             }}
             style={input(theme)}
           />
+
           {open && (
             <div style={combo(theme)}>
               {results.length === 0 && (
                 <div style={comboEmpty}>Sin resultados</div>
               )}
+
               {results.map((r) => (
                 <button
                   key={r.id_maestro}
@@ -126,9 +151,7 @@ function MaestroCard(
                     setQ("");
                   }}
                 >
-                  {r.nombre} {r.ap_paterno} {r.ap_materno || ""}{" "}
-                  {r.rfc ? `· ${r.rfc}` : ""}{" "}
-                  {r.numero_de_personal ? `· #${r.numero_de_personal}` : ""}
+                  {r.nombre} {r.ap_paterno} {r.ap_materno} · {r.rfc}
                 </button>
               ))}
             </div>
@@ -136,89 +159,56 @@ function MaestroCard(
         </div>
       </header>
 
-      <div
-        style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}
-      >
-        <Field
-          label="Nombre"
-          value={form.nombre}
-          onChange={(v) => onFormChange({ ...form, nombre: v })}
-          theme={theme}
-        />
-        <Field
-          label="Apellido Paterno"
-          value={form.ap_paterno}
+      {/* FORM */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        <Field label="Nombre" value={form.nombre} onChange={(v) => onFormChange({ ...form, nombre: v })} theme={theme} />
+
+        <Field label="Apellido Paterno" value={form.ap_paterno}
           onChange={(v) => onFormChange({ ...form, ap_paterno: v })}
           theme={theme}
         />
-        <Field
-          label="Apellido Materno"
-          value={form.ap_materno}
+
+        <Field label="Apellido Materno" value={form.ap_materno}
           onChange={(v) => onFormChange({ ...form, ap_materno: v })}
           theme={theme}
         />
+
         <Field
           label="RFC"
           value={form.rfc}
-          onChange={(v) => onFormChange({ ...form, rfc: v.toUpperCase() })}
+          onChange={(v) =>
+            onFormChange({ ...form, rfc: v.replace(/\s+/g, "").toUpperCase() })
+          }
           theme={theme}
           maxLength={13}
         />
+
         <Field
           label="Número de Personal"
           value={form.numero_de_personal}
           onChange={(v) =>
-            onFormChange({ ...form, numero_de_personal: v })
+            onFormChange({
+              ...form,
+              numero_de_personal: v.replace(/\s+/g, ""),
+            })
           }
           theme={theme}
         />
       </div>
 
-      <div
-        style={{
-          display: "flex",
-          gap: 10,
-          marginTop: 14,
-          flexWrap: "wrap",
-        }}
-      >
-        <button
-          onClick={guardar}
-          disabled={saving}
-          style={primaryBtn(theme)}
-        >
+      {/* BOTONES */}
+      <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
+        <button onClick={guardar} disabled={saving} style={primaryBtn(theme)}>
           {saving ? "Guardando…" : "Guardar maestro"}
         </button>
-        <button
-          onClick={() => {
-            onSelect(null);
-            onFormChange({
-              nombre: "",
-              ap_paterno: "",
-              ap_materno: "",
-              rfc: "",
-              numero_de_personal: "",
-            });
-          }}
-          style={ghostBtn(theme)}
-        >
+
+        <button onClick={limpiar} style={ghostBtn(theme)}>
           Limpiar
         </button>
-        {selected && (
-          <span
-            style={{
-              alignSelf: "center",
-              fontSize: 16,
-              color: "#555",
-            }}
-          >
-          </span>
-        )}
       </div>
+
       {msg && (
-        <div
-          style={feedback(theme, msg.includes("✓") ? "ok" : "err")}
-        >
+        <div style={feedback(theme, msg.includes("✓") ? "ok" : "err")}>
           {msg}
         </div>
       )}
@@ -229,11 +219,10 @@ function MaestroCard(
 function Field({ label, value, onChange, theme, type = "text", maxLength }) {
   return (
     <div>
-      <label
-        style={{ color: "#111", fontWeight: 700, fontSize: 18 }}
-      >
+      <label style={{ color: "#111", fontWeight: 700, fontSize: 18 }}>
         {label}
       </label>
+
       <input
         type={type}
         value={value || ""}

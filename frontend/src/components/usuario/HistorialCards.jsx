@@ -14,7 +14,6 @@ function HistorialCards({ theme }, ref) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // 👇 Exponer método para que la voz llene el buscador
   useImperativeHandle(ref, () => ({
     setSearch: (texto) => setQ(texto),
     reload: () => load(),
@@ -25,6 +24,7 @@ function HistorialCards({ theme }, ref) {
     try {
       const r = await listarInstanciasUsuario();
       const data = Array.isArray(r?.data) ? r.data : [];
+
       setItems(
         data.map((x) => ({
           id: x.id_instancia,
@@ -50,6 +50,7 @@ function HistorialCards({ theme }, ref) {
   const filtered = useMemo(() => {
     const n = q.trim().toLowerCase();
     if (!n) return items;
+
     return items.filter(
       (i) =>
         String(i.id).includes(n) ||
@@ -66,7 +67,7 @@ function HistorialCards({ theme }, ref) {
 
   return (
     <div>
-      {/* 🔍 Barra de búsqueda */}
+      {/* 🔍 BARRA DE BÚSQUEDA */}
       <div
         style={{
           display: "flex",
@@ -76,12 +77,14 @@ function HistorialCards({ theme }, ref) {
         }}
       >
         <span style={pill(theme)}>Buscar</span>
+
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Folio, trámite, maestro, estado…"
           style={{ ...input(theme), maxWidth: 420, fontSize: 18 }}
         />
+
         <button
           onClick={load}
           style={{
@@ -106,6 +109,7 @@ function HistorialCards({ theme }, ref) {
         </div>
       )}
 
+      {/* 🧩 GRID DE TARJETAS */}
       <div
         style={{
           display: "grid",
@@ -117,13 +121,17 @@ function HistorialCards({ theme }, ref) {
           <article
             key={item.id}
             style={{
+              display: "flex",
+              flexDirection: "column",
               background: "#fff",
               border: `1.5px solid ${theme.border}`,
               borderRadius: 16,
               padding: 20,
               boxShadow: "0 12px 24px rgba(17,17,17,.06)",
+              minHeight: 260, // 🔥 asegura misma altura
             }}
           >
+            {/* Encabezado */}
             <div
               style={{
                 display: "flex",
@@ -145,42 +153,120 @@ function HistorialCards({ theme }, ref) {
               >
                 Folio #{item.id}
               </span>
+
               <div style={{ fontSize: 16, color: "#6b6259" }}>
                 {fmtFecha(item.fecha)}
               </div>
             </div>
 
+            {/* Datos */}
             <h4 style={{ margin: "6px 0 10px", fontSize: 22 }}>
               {item.tramite}
             </h4>
-            <div
-              style={{
-                fontSize: 18,
-                color: "#3a3734",
-                marginBottom: 10,
-              }}
-            >
+
+            <div style={{ fontSize: 18, marginBottom: 10 }}>
               Maestro: <strong>{item.maestro || "-"}</strong>
             </div>
 
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <span
-                style={{
-                  padding: "6px 12px",
-                  borderRadius: 999,
-                  border: "1px solid #E5E1DC",
-                  fontSize: 16,
-                  fontWeight: 700,
-                  background: theme.beige,
-                  color: "#111",
-                }}
-              >
-                {item.estado}
-              </span>
-            </div>
+            <span
+              style={{
+                padding: "6px 12px",
+                borderRadius: 999,
+                border: "1px solid #E5E1DC",
+                fontSize: 16,
+                fontWeight: 700,
+                background: theme.beige,
+                color: "#111",
+              }}
+            >
+              {item.estado}
+            </span>
 
-            {/* Botón de constancia igual que ya tenías */}
-            {/* ... (puedes mantener tu lógica de constancia aquí) */}
+            {/* 🔥 empuja el botón hacia la parte inferior */}
+            <div style={{ flexGrow: 1 }}></div>
+
+            {/* 📄 BOTÓN DE CONSTANCIA */}
+            <div style={{ marginTop: 12 }}>
+              {item.constanciaPath ? (
+                <button
+                  onClick={async () => {
+                    try {
+                      const url = `${API_BASE}${item.constanciaPath}`;
+                      const res = await fetch(url, {
+                        headers: {
+                          Authorization: `Bearer ${localStorage.getItem(
+                            "token"
+                          )}`,
+                        },
+                      });
+
+                      const blob = await res.blob();
+                      const link = document.createElement("a");
+                      link.href = window.URL.createObjectURL(blob);
+                      link.download = `Constancia_Tramite_${item.id}.docx`;
+                      link.click();
+                    } catch (err) {
+                      alert("No se pudo descargar la constancia.");
+                    }
+                  }}
+                  style={{
+                    padding: "10px 16px",
+                    background: theme.blue,
+                    color: "#fff",
+                    borderRadius: 8,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  Descargar constancia
+                </button>
+              ) : (
+                <button
+                  onClick={async () => {
+                    if (
+                      !window.confirm(
+                        "¿Deseas generar la constancia de este trámite?"
+                      )
+                    )
+                      return;
+
+                    try {
+                      const res = await fetch(
+                        `${API_BASE}/api/sitev/tramite/constancia/${item.id}`,
+                        {
+                          method: "GET",
+                          headers: {
+                            Authorization: `Bearer ${localStorage.getItem(
+                              "token"
+                            )}`,
+                          },
+                        }
+                      );
+
+                      const blob = await res.blob();
+                      const a = document.createElement("a");
+                      a.href = URL.createObjectURL(blob);
+                      a.download = `Constancia_Tramite_${item.id}.docx`;
+                      a.click();
+
+                      await load();
+                    } catch (err) {
+                      alert("No se pudo generar la constancia.");
+                    }
+                  }}
+                  style={{
+                    padding: "10px 16px",
+                    background: theme.redDark,
+                    color: "#fff",
+                    borderRadius: 8,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  Generar constancia
+                </button>
+              )}
+            </div>
           </article>
         ))}
       </div>
